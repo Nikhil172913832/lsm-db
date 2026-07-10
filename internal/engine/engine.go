@@ -7,18 +7,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/Nikhil172913832/lsm-db/internal/memtable"
-	"github.com/Nikhil172913832/lsm-db/internal/wal"
 )
 
 type Engine struct {
-	mu                sync.RWMutex
-	activeMemtable    *memtable.Memtable
-	immutableMemtable *memtable.Memtable
-	activeWAL         *wal.WAL
-	immutableWAL      *wal.WAL
-	// sstables          []*SSTable
+	mu        sync.RWMutex
+	active    *State
+	immutable *State
+	// sstables          []*SSTable #TO DO
 	walDir            string
 	ssTableDir        string
 	maxLevel          int
@@ -47,7 +42,7 @@ func New(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, e
 		engine.nextSeqNum = 1
 		filename := fmt.Sprintf("%s_%06d", "wal", engine.nextSeqNum)
 		filePath := filepath.Join(walDir, filename)
-		engine.activeWAL, engine.activeMemtable, err = LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
+		engine.active.LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +57,7 @@ func New(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, e
 			return nil, err
 		}
 		engine.nextSeqNum++
-		engine.activeWAL, engine.activeMemtable, err = LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
+		engine.active.LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
 		if err != nil {
 			return nil, err
 		}
@@ -77,12 +72,12 @@ func New(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, e
 			return nil, err
 		}
 		engine.nextSeqNum++
-		engine.activeWAL, engine.activeMemtable, err = LoadWALAndMemtable(activeFilePath, engine.maxLevel, engine.memtableThreshold)
+		engine.active.LoadWALAndMemtable(activeFilePath, engine.maxLevel, engine.memtableThreshold)
 		if err != nil {
 			return nil, err
 		}
 		immutableFilePath := filepath.Join(walDir, entries[0].Name())
-		engine.immutableWAL, engine.immutableMemtable, err = LoadWALAndMemtable(immutableFilePath, engine.maxLevel, engine.memtableThreshold)
+		engine.immutable.LoadWALAndMemtable(immutableFilePath, engine.maxLevel, engine.memtableThreshold)
 		if err != nil {
 			return nil, err
 		}
