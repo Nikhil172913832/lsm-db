@@ -47,6 +47,6 @@ func (w *WAL) Append(key, val []byte) error {
 	return w.file.Sync()
 }
 
-func (w *WAL) Path() string{
+func (w *WAL) Path() string {
 	return w.path
 }

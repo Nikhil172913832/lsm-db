@@ -12,7 +12,7 @@ type Memtable struct {
 
 func New(maxLevel int, threshold int) *Memtable {
 	return &Memtable{
-		skiplist:  skiplist.New(maxLevel),
+		skiplist:  skiplist.NewSkipList(maxLevel),
 		sizeBytes: 0,
 		threshold: threshold,
 	}
@@ -40,6 +40,6 @@ func (mt *Memtable) Delete(key []byte) {
 	mt.sizeBytes += delta
 }
 
-func (mt *Memtable) Size() int{
+func (mt *Memtable) Size() int {
 	return mt.sizeBytes
 }

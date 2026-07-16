@@ -10,7 +10,7 @@ type SkipList struct {
 	level    int
 }
 
-func New(maxLevel int) *SkipList {
+func NewSkipList(maxLevel int) *SkipList {
 	head := &Node{
 		key:      nil,
 		Value:    nil,
