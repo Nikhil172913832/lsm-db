@@ -6,14 +6,14 @@ import (
 
 type Memtable struct {
 	skiplist  *skiplist.SkipList
-	SizeBytes int
+	sizeBytes int
 	threshold int
 }
 
 func New(maxLevel int, threshold int) *Memtable {
 	return &Memtable{
 		skiplist:  skiplist.New(maxLevel),
-		SizeBytes: 0,
+		sizeBytes: 0,
 		threshold: threshold,
 	}
 }
@@ -23,7 +23,7 @@ func (mt *Memtable) Put(key, value []byte) error {
 		return ErrEmptyOrNilValue
 	}
 	delta := mt.skiplist.Insert(key, value)
-	mt.SizeBytes += delta
+	mt.sizeBytes += delta
 	return nil
 }
 
@@ -37,5 +37,9 @@ func (mt *Memtable) Get(key []byte) ([]byte, bool) {
 
 func (mt *Memtable) Delete(key []byte) {
 	delta := mt.skiplist.Insert(key, nil)
-	mt.SizeBytes += delta
+	mt.sizeBytes += delta
+}
+
+func (mt *Memtable) Size() int{
+	return mt.sizeBytes
 }

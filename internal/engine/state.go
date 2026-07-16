@@ -1,25 +1,82 @@
 package engine
 
 import (
+	"sync"
+
 	"github.com/Nikhil172913832/lsm-db/internal/memtable"
 	"github.com/Nikhil172913832/lsm-db/internal/wal"
 )
 
-type State struct{
-	wal *wal.WAL
-	mem *memtable.Memtable
+type WriteState struct {
+	wal     *wal.WAL
+	mem     *memtable.Memtable
+	mu      sync.Mutex
+	frozen  bool
+	writers int
 }
 
-func (st *State) LoadWALAndMemtable(path string, maxLevel, threshold int) error {
+func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
 	wal, err := wal.New(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	mem := memtable.New(maxLevel, threshold)
 	if err := wal.ReadAll(ReplayInto(mem)); err != nil {
-		return err
+		return nil, err
 	}
-	st.wal = wal
-	st.mem = mem
-	return nil
+	return &WriteState{
+		wal: wal,
+		mem: mem,
+	}, nil
+}
+
+func ReplayInto(memtable *memtable.Memtable) func(key, value []byte) error {
+	return func(key, value []byte) error {
+		if len(value) == 0 {
+			memtable.Delete(key)
+			return nil
+		}
+		return memtable.Put(key, value)
+	}
+}
+
+func (st *WriteState) AcquireForWrite() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.frozen {
+		return false
+	}
+	st.writers++
+	return true
+}
+
+func (st *WriteState) ReleaseWrite() (becameIdle bool, err error) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.writers == 0 {
+		return false, ErrActiveStateDoubleFree
+	}
+	st.writers--
+	if st.writers == 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (st *WriteState) Freeze() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.frozen {
+		return false
+	}
+	st.frozen = true
+	return true
+}
+
+func (st *WriteState) WalPath() string {
+	return st.wal.Path()
+}
+
+func (st *WriteState) Size() int {
+	return st.mem.Size()
 }

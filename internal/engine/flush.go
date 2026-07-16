@@ -6,21 +6,22 @@ import (
 )
 
 func (e *Engine) maybeFlush() error {
-	if e.active.mem.SizeBytes > e.memtableThreshold {
-		e.mu.Lock()
-		e.immutable = e.active
-		filename := fmt.Sprintf("%s_%06d", "wal", e.nextSeqNum)
-		filePath := filepath.Join(e.walDir, filename)
-		var err error
-		e.active.LoadWALAndMemtable(filePath, e.maxLevel, e.memtableThreshold)
-		if err != nil {
-			e.active = e.immutable
-			e.immutable = nil
-			e.mu.Unlock()
-			return err
+		if e.state.current.Size() > e.memtableThreshold {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			filename := fmt.Sprintf("%s_%06d", "wal", e.nextSeqNum)
+			filePath := filepath.Join(e.walDir, filename)
+			newCurrent, err := NewWriteState(filePath, e.maxLevel, e.memtableThreshold)
+			newImmutable := append(e.state.immutable, e.state.current)
+			if err != nil{
+				return err
+			}
+			e.state = &EngineState{
+				current: newCurrent,
+				immutable: newImmutable,
+				// ssTables: e.ssTables TO DO
+			}
+			e.nextSeqNum++
 		}
-		e.mu.Unlock()
-	}
-
-	return nil
+		return nil
 }

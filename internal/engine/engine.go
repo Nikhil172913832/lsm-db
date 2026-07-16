@@ -9,11 +9,14 @@ import (
 	"sync"
 )
 
+type EngineState struct {
+	current   *WriteState
+	immutable []*WriteState
+	// ssTables          []*SSTable #TO DO
+}
 type Engine struct {
-	mu        sync.RWMutex
-	active    *State
-	immutable *State
-	// sstables          []*SSTable #TO DO
+	mu                sync.RWMutex
+	state             *EngineState
 	walDir            string
 	ssTableDir        string
 	maxLevel          int
@@ -21,7 +24,7 @@ type Engine struct {
 	nextSeqNum        int
 }
 
-func New(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, error) {
+func NewEngine(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, error) {
 	engine := Engine{
 		walDir:            walDir,
 		ssTableDir:        sstableDir,
@@ -38,51 +41,44 @@ func New(walDir, sstableDir string, maxLevel, memtableThreshold int) (*Engine, e
 	if err != nil {
 		return nil, err
 	}
+	state := &EngineState{}
 	if len(entries) == 0 {
 		engine.nextSeqNum = 1
 		filename := fmt.Sprintf("%s_%06d", "wal", engine.nextSeqNum)
 		filePath := filepath.Join(walDir, filename)
-		engine.active.LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
-		if err != nil {
-			return nil, err
-		}
-	} else if len(entries) == 1 {
-		filePath := filepath.Join(walDir, entries[0].Name())
-		fileNameParts := strings.Split(entries[0].Name(), "_")
-		if len(fileNameParts) != 2 {
-			return nil, InvalidWALFileName
-		}
-		engine.nextSeqNum, err = strconv.Atoi(fileNameParts[1])
-		if err != nil {
-			return nil, err
-		}
-		engine.nextSeqNum++
-		engine.active.LoadWALAndMemtable(filePath, engine.maxLevel, engine.memtableThreshold)
-		if err != nil {
-			return nil, err
-		}
-	} else if len(entries) == 2 {
-		activeFilePath := filepath.Join(walDir, entries[len(entries)-1].Name())
-		fileNameParts := strings.Split(entries[len(entries)-1].Name(), "_")
-		if len(fileNameParts) != 2 {
-			return nil, InvalidWALFileName
-		}
-		engine.nextSeqNum, err = strconv.Atoi(fileNameParts[1])
-		if err != nil {
-			return nil, err
-		}
-		engine.nextSeqNum++
-		engine.active.LoadWALAndMemtable(activeFilePath, engine.maxLevel, engine.memtableThreshold)
-		if err != nil {
-			return nil, err
-		}
-		immutableFilePath := filepath.Join(walDir, entries[0].Name())
-		engine.immutable.LoadWALAndMemtable(immutableFilePath, engine.maxLevel, engine.memtableThreshold)
+		state.current, err = NewWriteState(filePath, engine.maxLevel, engine.memtableThreshold)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		return nil, InvalidNoOfFilesInWALDir
+		for i := 0; i < len(entries)-1; i++ {
+			filePath := filepath.Join(walDir, entries[i].Name())
+			fileNameParts := strings.Split(entries[i].Name(), "_")
+			if len(fileNameParts) != 2 {
+				return nil, InvalidWALFileName
+			}
+			immutable, err := NewWriteState(filePath, engine.maxLevel, engine.memtableThreshold)
+			if err != nil {
+				return nil, err
+			}
+			immutable.Freeze()
+			state.immutable = append(state.immutable, immutable)
+		}
+		filePath := filepath.Join(walDir, entries[len(entries)-1].Name())
+		fileNameParts := strings.Split(entries[len(entries)-1].Name(), "_")
+		if len(fileNameParts) != 2 {
+			return nil, InvalidWALFileName
+		}
+		state.current, err = NewWriteState(filePath, engine.maxLevel, engine.memtableThreshold)
+		if err != nil {
+			return nil, err
+		}
+		engine.nextSeqNum, err = strconv.Atoi(fileNameParts[1])
+		if err != nil {
+			return nil, err
+		}
 	}
+	engine.nextSeqNum++
+	engine.state = state
 	return &engine, nil
 }
