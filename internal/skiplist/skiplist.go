@@ -12,55 +12,44 @@ type SkipList struct {
 
 func NewSkipList(maxLevel int) *SkipList {
 	head := &Node{
-		key:      nil,
-		Value:    nil,
 		skipPtrs: make([]*Node, maxLevel),
 	}
 	return &SkipList{
 		head:     head,
 		maxLevel: maxLevel,
-		level:    0,
 	}
 }
 
 func (sl *SkipList) Insert(key, value []byte) int {
-
 	temp := sl.head
-	level := sl.level - 1
-	var prevPtr []*Node
-	for {
-		if temp == nil {
-			break
-		}
-		change := false
-		for ; level >= 0; level-- {
-			if temp.skipPtrs[level] != nil {
-				comp := bytes.Compare(temp.skipPtrs[level].key, key)
-				if comp < 0 {
-					temp = temp.skipPtrs[level]
-					change = true
-					break
-				} else if comp == 0 {
-					delta := len(value) - len(temp.skipPtrs[level].Value)
-					temp.skipPtrs[level].Value = value
-					return delta
-				}
+	prevPtr := make([]*Node, sl.maxLevel)
+	for i := sl.level - 1; i >= 0; i-- {
+		for {
+			if temp.skipPtrs[i] != nil && bytes.Compare(temp.skipPtrs[i].key, key) < 0 {
+				temp = temp.skipPtrs[i]
+			} else {
+				break
 			}
-			prevPtr = append(prevPtr, temp)
 		}
-		if !change {
-			break
+		if temp.skipPtrs[i] != nil && bytes.Equal(temp.skipPtrs[i].key, key) {
+			delta := len(value) - len(temp.skipPtrs[i].Value)
+			value = bytes.Clone(value)
+			temp.skipPtrs[i].Value = value
+			return delta
 		}
+		prevPtr[i] = temp
 	}
 	newLevel := RandomLevel(sl.maxLevel)
+	key = bytes.Clone(key)
+    value = bytes.Clone(value)
 	newNode := Node{key: key, Value: value}
-	for i := len(prevPtr) - 1; i >= max(len(prevPtr)-newLevel, 0); i-- {
-		newNode.skipPtrs = append(newNode.skipPtrs, prevPtr[i].skipPtrs[len(prevPtr)-1-i])
-		prevPtr[i].skipPtrs[len(prevPtr)-1-i] = &newNode
+	newNode.skipPtrs = make([]*Node, newLevel)
+	for i := sl.level; i < newLevel; i++ {
+		prevPtr[i] = sl.head
 	}
-	for i := len(prevPtr); i < newLevel; i++ {
-		sl.head.skipPtrs[i] = &newNode
-		newNode.skipPtrs = append(newNode.skipPtrs, nil)
+	for i := range newLevel {
+		newNode.skipPtrs[i] = prevPtr[i].skipPtrs[i]
+		prevPtr[i].skipPtrs[i] = &newNode
 	}
 	sl.level = max(sl.level, newLevel)
 	return len(value) + len(key)
@@ -68,26 +57,16 @@ func (sl *SkipList) Insert(key, value []byte) int {
 
 func (sl *SkipList) Search(key []byte) *Node {
 	temp := sl.head
-	level := sl.level - 1
-	for {
-		if temp == nil {
-			break
-		}
-		change := false
-		for ; level >= 0; level-- {
-			if temp.skipPtrs[level] != nil {
-				comp := bytes.Compare(temp.skipPtrs[level].key, key)
-				if comp < 0 {
-					temp = temp.skipPtrs[level]
-					change = true
-					break
-				} else if comp == 0 {
-					return temp.skipPtrs[level]
-				}
+	for i := sl.level - 1; i >= 0; i-- {
+		for {
+			if temp.skipPtrs[i] != nil && bytes.Compare(temp.skipPtrs[i].key, key) < 0 {
+				temp = temp.skipPtrs[i]
+			} else {
+				break
 			}
 		}
-		if !change {
-			break
+		if temp.skipPtrs[i] != nil && bytes.Equal(temp.skipPtrs[i].key, key) {
+			return temp.skipPtrs[i]
 		}
 	}
 	return nil
