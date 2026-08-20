@@ -1,6 +1,8 @@
 package memtable
 
 import (
+	"sync"
+
 	"github.com/Nikhil172913832/lsm-db/internal/skiplist"
 )
 
@@ -8,9 +10,10 @@ type Memtable struct {
 	skiplist  *skiplist.SkipList
 	sizeBytes int
 	threshold int
+	mu        sync.RWMutex
 }
 
-func New(maxLevel int, threshold int) *Memtable {
+func NewMemtable(maxLevel int, threshold int) *Memtable {
 	return &Memtable{
 		skiplist:  skiplist.NewSkipList(maxLevel),
 		sizeBytes: 0,
@@ -18,16 +21,16 @@ func New(maxLevel int, threshold int) *Memtable {
 	}
 }
 
-func (mt *Memtable) Put(key, value []byte) error {
-	if len(value) == 0 {
-		return ErrEmptyOrNilValue
-	}
+func (mt *Memtable) Put(key, value []byte) {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
 	delta := mt.skiplist.Insert(key, value)
 	mt.sizeBytes += delta
-	return nil
 }
 
 func (mt *Memtable) Get(key []byte) ([]byte, bool) {
+	mt.mu.RLock()
+	defer mt.mu.RUnlock()
 	node := mt.skiplist.Search(key)
 	if node == nil {
 		return nil, false
@@ -36,10 +39,20 @@ func (mt *Memtable) Get(key []byte) ([]byte, bool) {
 }
 
 func (mt *Memtable) Delete(key []byte) {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
 	delta := mt.skiplist.Insert(key, nil)
 	mt.sizeBytes += delta
 }
 
 func (mt *Memtable) Size() int {
+	mt.mu.RLock()
+	defer mt.mu.RUnlock()
 	return mt.sizeBytes
+}
+
+func (mt *Memtable) NewIterator() *skiplist.Iterator{
+	mt.mu.RLock();
+	defer mt.mu.RUnlock()
+	return mt.skiplist.NewIterator()
 }

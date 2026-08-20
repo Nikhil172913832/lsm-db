@@ -20,7 +20,7 @@ func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
 	if err != nil {
 		return nil, err
 	}
-	mem := memtable.New(maxLevel, threshold)
+	mem := memtable.NewMemtable(maxLevel, threshold)
 	if err := wal.ReadAll(ReplayInto(mem)); err != nil {
 		return nil, err
 	}
@@ -36,7 +36,8 @@ func ReplayInto(memtable *memtable.Memtable) func(key, value []byte) error {
 			memtable.Delete(key)
 			return nil
 		}
-		return memtable.Put(key, value)
+		memtable.Put(key, value)
+		return nil
 	}
 }
 
