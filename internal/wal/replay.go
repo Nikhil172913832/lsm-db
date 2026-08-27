@@ -5,15 +5,16 @@ import (
 	"io"
 )
 
-func (w *WAL) ReadAll(fn func(key, value []byte) error) error {
+func (w *WAL) ReadAll(fn func(op byte, key, value []byte) error) error {
 	var offset int64 = 0
 	for {
 		var key, val []byte
 		var err error
-		key, val, offset, err = w.readRecord(offset)
+		var op byte
+		op, key, val, offset, err = w.readRecord(offset)
 		switch {
 		case err == nil:
-			if err := fn(key, val); err != nil {
+			if err := fn(op, key, val); err != nil {
 				return err
 			}
 		case errors.Is(err, io.EOF):

@@ -1,39 +1,36 @@
 package wal
 
-import "encoding/binary"
+import (
+	"encoding/binary"
 
-func (w *WAL) readRecord(offset int64) ([]byte, []byte, int64, error) {
+	"github.com/zeebo/xxh3"
+)
+
+func (w *WAL) readRecord(offset int64) (op byte, key []byte, val []byte, nextOffset int64, err error) {
 	start := offset
 	cursor := offset
-	var lenBuf [4]byte
-	if _, err := w.file.ReadAt(lenBuf[:], cursor); err != nil {
-		return nil, nil, start, err
+	var header [12]byte
+	if _, err := w.file.ReadAt(header[:], cursor); err != nil {
+		return 0, nil, nil, start, err
 	}
-	keyLen := binary.LittleEndian.Uint32(lenBuf[:])
-	if keyLen > MaxKeySize {
-		return nil, nil, start, ErrCorruptRecord
+	checksum := binary.LittleEndian.Uint64(header[0:8])
+	payloadLen := binary.LittleEndian.Uint32(header[8:12])
+	if payloadLen > MaxPayloadSize {
+		return 0, nil, nil, start, ErrCorruptRecord
 	}
-	cursor += 4
-	key := make([]byte, keyLen)
-	if _, err := w.file.ReadAt(key, cursor); err != nil {
-		return nil, nil, start, err
+	cursor += 12
+	payload := make([]byte, payloadLen)
+	if _, err := w.file.ReadAt(payload, cursor); err != nil {
+		return 0, nil, nil, start, err
 	}
-	cursor += int64(keyLen)
-	if _, err := w.file.ReadAt(lenBuf[:], cursor); err != nil {
-		return nil, nil, start, err
+	nextOffset = cursor + int64(payloadLen)
+	actualChecksum := xxh3.Hash(payload)
+	if actualChecksum != checksum {
+		return 0, nil, nil, start, ErrCorruptRecord
 	}
-	valLen := binary.LittleEndian.Uint32(lenBuf[:])
-	if valLen > MaxValueSize {
-		return nil, nil, start, ErrCorruptRecord
-	}
-	cursor += 4
-	var val []byte
-	if valLen > 0 {
-		val = make([]byte, valLen)
-		if _, err := w.file.ReadAt(val, cursor); err != nil {
-			return nil, nil, start, err
-		}
-		cursor += int64(valLen)
-	}
-	return key, val, cursor, nil
+	op = payload[0]
+	keyLen := binary.LittleEndian.Uint32(payload[1:5])
+	key = payload[5 : 5+keyLen]
+	val = payload[5+keyLen:]
+	return
 }

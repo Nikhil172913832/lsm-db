@@ -30,9 +30,9 @@ func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
 	}, nil
 }
 
-func ReplayInto(memtable *memtable.Memtable) func(key, value []byte) error {
-	return func(key, value []byte) error {
-		if len(value) == 0 {
+func ReplayInto(memtable *memtable.Memtable) func(op byte, key, value []byte) error {
+	return func(op byte, key, value []byte) error {
+		if op == wal.OpDelete {
 			memtable.Delete(key)
 			return nil
 		}
