@@ -16,7 +16,7 @@ type WriteState struct {
 }
 
 func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
-	wal, err := wal.New(path)
+	wal, err := wal.NewWAL(path)
 	if err != nil {
 		return nil, err
 	}

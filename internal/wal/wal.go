@@ -2,6 +2,7 @@ package wal
 
 import (
 	"encoding/binary"
+	"io"
 	"os"
 	"sync"
 
@@ -14,9 +15,13 @@ type WAL struct {
 	mu   sync.Mutex
 }
 
-func New(path string) (*WAL, error) {
+func NewWAL(path string) (*WAL, error) {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := file.Seek(0, io.SeekEnd); err != nil{
+		file.Close()
 		return nil, err
 	}
 	return &WAL{
