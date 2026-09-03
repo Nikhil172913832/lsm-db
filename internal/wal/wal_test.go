@@ -3,8 +3,10 @@ package wal
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -257,5 +259,44 @@ func TestReopenAndAppendContinuity(t *testing.T) {
 		if !bytes.Equal(collected[i].value, values[i]) {
 			t.Fatal("Incorrect Value")
 		}
+	}
+}
+
+func TestConcurrentGroupCommit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wal_concurrent")
+	w, err := NewWAL(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const numWriters = 20
+	const writesPerGoroutine = 50
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range numWriters {
+		wg.Add(1)
+		go func(writerID int) {
+			defer wg.Done()
+			<-start
+			for j := 0; j < writesPerGoroutine; j++ {
+				key := fmt.Appendf(nil, "w_%02d_k_%04d", writerID, j)
+				val := fmt.Appendf(nil, "val_%02d_%04d", writerID, j)
+				if err := w.Append(OpPut, key, val); err != nil {
+					t.Errorf("Append failed: %v", err)
+				}
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	count := 0
+	err = w.ReadAll(func(op byte, key, value []byte) error {
+		count++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ReadAll failed: %v", err)
+	}
+	if count != numWriters*writesPerGoroutine {
+		t.Fatalf("Expected %d records, got %d", numWriters*writesPerGoroutine, count)
 	}
 }
