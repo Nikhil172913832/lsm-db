@@ -21,9 +21,11 @@ type WAL struct {
 	mu           sync.Mutex
 	queue        []*writeRequest
 	leaderActive bool
+	maxKeySize   uint32
+	maxValueSize uint32
 }
 
-func NewWAL(path string) (*WAL, error) {
+func NewWAL(path string, maxKeySize, maxValueSize uint32) (*WAL, error) {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, err
@@ -33,16 +35,18 @@ func NewWAL(path string) (*WAL, error) {
 		return nil, err
 	}
 	return &WAL{
-		file: file,
-		path: path,
+		file:         file,
+		path:         path,
+		maxKeySize:   maxKeySize,
+		maxValueSize: maxValueSize,
 	}, nil
 }
 
 func (w *WAL) Append(op byte, key, val []byte) error {
-	if uint32(len(key)) > MaxKeySize {
+	if uint32(len(key)) > w.maxKeySize {
 		return ErrKeySizeExceedMaxLimit
 	}
-	if uint32(len(val)) > MaxValueSize {
+	if uint32(len(val)) > w.maxValueSize {
 		return ErrValSizeExceedMaxLimit
 	}
 	totalSize := 8 + 4 + 1 + 4 + len(key) + len(val)
@@ -100,4 +104,10 @@ func (w *WAL) Append(op byte, key, val []byte) error {
 
 func (w *WAL) Path() string {
 	return w.path
+}
+
+func (w *WAL) Close() error{
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.file.Close()
 }

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/Nikhil172913832/lsm-db/internal/base"
 )
 
 func TestAppendAndReadAll(t *testing.T) {
-	w, err := NewWAL(filepath.Join(t.TempDir(), "wal"))
+	w, err := NewWAL(filepath.Join(t.TempDir(), "wal"), 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -36,7 +38,7 @@ func TestAppendAndReadAll(t *testing.T) {
 		[]byte("Soap"),
 	}
 	for i := range keys {
-		w.Append(OpPut, keys[i], values[i])
+		w.Append(base.OpPut, keys[i], values[i])
 	}
 	type record struct {
 		op    byte
@@ -53,7 +55,7 @@ func TestAppendAndReadAll(t *testing.T) {
 		return nil
 	})
 	for i := range keys {
-		if collected[i].op != OpPut {
+		if collected[i].op != base.OpPut {
 			t.Fatal("Incorrect op type")
 		}
 		if !bytes.Equal(collected[i].key, keys[i]) {
@@ -67,7 +69,7 @@ func TestAppendAndReadAll(t *testing.T) {
 
 func TestBitFlipCorruption(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal")
-	w, err := NewWAL(path)
+	w, err := NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -92,7 +94,7 @@ func TestBitFlipCorruption(t *testing.T) {
 		[]byte("Soap"),
 	}
 	for i := range keys {
-		w.Append(OpPut, keys[i], values[i])
+		w.Append(base.OpPut, keys[i], values[i])
 	}
 	type record struct {
 		op    byte
@@ -125,7 +127,7 @@ func TestBitFlipCorruption(t *testing.T) {
 
 func TestTornWriteTruncation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal")
-	w, err := NewWAL(path)
+	w, err := NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +152,7 @@ func TestTornWriteTruncation(t *testing.T) {
 		[]byte("Soap"),
 	}
 	for i := range keys {
-		w.Append(OpPut, keys[i], values[i])
+		w.Append(base.OpPut, keys[i], values[i])
 	}
 	type record struct {
 		op    byte
@@ -170,7 +172,7 @@ func TestTornWriteTruncation(t *testing.T) {
 	file.Truncate(fileSize - 5)
 	file.Sync()
 	file.Close()
-	w, err = NewWAL(path)
+	w, err = NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +188,7 @@ func TestTornWriteTruncation(t *testing.T) {
 		t.Fatal("Expected ReadAll to fail")
 	}
 	for i := range 7 {
-		if collected[i].op != OpPut {
+		if collected[i].op != base.OpPut {
 			t.Fatal("Incorrect op type")
 		}
 		if !bytes.Equal(collected[i].key, keys[i]) {
@@ -200,7 +202,7 @@ func TestTornWriteTruncation(t *testing.T) {
 
 func TestReopenAndAppendContinuity(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal")
-	w, err := NewWAL(path)
+	w, err := NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -225,15 +227,15 @@ func TestReopenAndAppendContinuity(t *testing.T) {
 		[]byte("Soap"),
 	}
 	for i := range 4 {
-		w.Append(OpPut, keys[i], values[i])
+		w.Append(base.OpPut, keys[i], values[i])
 	}
 	w.file.Close()
-	w, err = NewWAL(path)
+	w, err = NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	for i := 4; i < 8; i++ {
-		w.Append(OpPut, keys[i], values[i])
+		w.Append(base.OpPut, keys[i], values[i])
 	}
 	type record struct {
 		op    byte
@@ -250,7 +252,7 @@ func TestReopenAndAppendContinuity(t *testing.T) {
 		return nil
 	})
 	for i := range keys {
-		if collected[i].op != OpPut {
+		if collected[i].op != base.OpPut {
 			t.Fatal("Incorrect op type")
 		}
 		if !bytes.Equal(collected[i].key, keys[i]) {
@@ -264,7 +266,7 @@ func TestReopenAndAppendContinuity(t *testing.T) {
 
 func TestConcurrentGroupCommit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal_concurrent")
-	w, err := NewWAL(path)
+	w, err := NewWAL(path, 1<<20, 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +282,7 @@ func TestConcurrentGroupCommit(t *testing.T) {
 			for j := 0; j < writesPerGoroutine; j++ {
 				key := fmt.Appendf(nil, "w_%02d_k_%04d", writerID, j)
 				val := fmt.Appendf(nil, "val_%02d_%04d", writerID, j)
-				if err := w.Append(OpPut, key, val); err != nil {
+				if err := w.Append(base.OpPut, key, val); err != nil {
 					t.Errorf("Append failed: %v", err)
 				}
 			}

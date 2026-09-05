@@ -15,7 +15,7 @@ func (w *WAL) readRecord(offset int64) (op byte, key []byte, val []byte, nextOff
 	}
 	checksum := binary.LittleEndian.Uint64(header[0:8])
 	payloadLen := binary.LittleEndian.Uint32(header[8:12])
-	if payloadLen > MaxPayloadSize {
+	if payloadLen > w.maxKeySize+w.maxValueSize {
 		return 0, nil, nil, start, ErrCorruptRecord
 	}
 	cursor += 12

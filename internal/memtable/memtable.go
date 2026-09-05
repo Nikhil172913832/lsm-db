@@ -38,13 +38,6 @@ func (mt *Memtable) Get(key []byte) ([]byte, bool) {
 	return node.Value, true
 }
 
-func (mt *Memtable) Delete(key []byte) {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
-	delta := mt.skiplist.Insert(key, nil)
-	mt.sizeBytes += delta
-}
-
 func (mt *Memtable) Size() int {
 	mt.mu.RLock()
 	defer mt.mu.RUnlock()

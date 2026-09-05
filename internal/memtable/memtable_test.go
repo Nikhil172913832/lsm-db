@@ -35,18 +35,6 @@ func TestInsertEmptySlice(t *testing.T) {
 	}
 }
 
-func TestDeleteAKey(t *testing.T) {
-	mt := NewMemtable(8, 10)
-	key := []byte("apple")
-	want := []byte("red")
-	mt.Put(key, want)
-	mt.Delete(key)
-	got, found := mt.Get(key)
-	if got != nil || !found {
-		t.Fatalf("expected nil value got %q", got)
-	}
-}
-
 func TestGetMissingKey(t *testing.T) {
 	mt := NewMemtable(8, 10)
 	key := []byte("apple")
@@ -78,7 +66,7 @@ func TestConcurrency(t *testing.T) {
 			<-start
 			key := []byte(strconv.Itoa(i))
 			mt.Get(key)
-			
+
 		}()
 	}
 	close(start)

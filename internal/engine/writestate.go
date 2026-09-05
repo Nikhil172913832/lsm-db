@@ -5,6 +5,7 @@ import (
 
 	"github.com/Nikhil172913832/lsm-db/internal/memtable"
 	"github.com/Nikhil172913832/lsm-db/internal/wal"
+	"github.com/Nikhil172913832/lsm-db/internal/base"
 )
 
 type WriteState struct {
@@ -15,8 +16,8 @@ type WriteState struct {
 	writers int
 }
 
-func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
-	wal, err := wal.NewWAL(path)
+func NewWriteState(path string, maxLevel, threshold int, maxKeySize, maxValueSize uint32) (*WriteState, error) {
+	wal, err := wal.NewWAL(path, maxKeySize, maxValueSize)
 	if err != nil {
 		return nil, err
 	}
@@ -32,8 +33,8 @@ func NewWriteState(path string, maxLevel, threshold int) (*WriteState, error) {
 
 func ReplayInto(memtable *memtable.Memtable) func(op byte, key, value []byte) error {
 	return func(op byte, key, value []byte) error {
-		if op == wal.OpDelete {
-			memtable.Delete(key)
+		if op == base.OpDelete {
+			memtable.Put(key, nil)
 			return nil
 		}
 		memtable.Put(key, value)
